@@ -31,6 +31,7 @@ jq -n \
   --arg apiKey "${API_KEY_VALUE}" \
   '{
     "$schema": "https://opencode.ai/config.json",
+    "autoupdate": false,
     "provider": {
       "berget": {
         "npm": "@ai-sdk/openai-compatible",
@@ -40,13 +41,13 @@ jq -n \
           "apiKey": $apiKey
         },
         "models": {
-          "kimi-k2-6":            { "name": "Kimi K2.6 (Berget)" },
-          "gemma4":               { "name": "Gemma 4 (Berget)" },
-          "mistral-medium-3.5":   { "name": "Mistral Medium 3.5 (Berget)" }
+          "moonshotai/Kimi-K2.6":             { "name": "Kimi K2.6 (Berget)" },
+          "google/gemma-4-31B-it":             { "name": "Gemma 4 31B (Berget)" },
+          "mistralai/Mistral-Medium-3.5-128B": { "name": "Mistral Medium 3.5 (Berget)" }
         }
       }
     },
-    "model": "berget/kimi-k2-6"
+    "model": "berget/moonshotai/Kimi-K2.6"
   }' > "${CONFIG_FILE}"
 
-echo "[OPENCODE] Wrote provider config to ${CONFIG_FILE} (provider=berget, default=kimi-k2-6)"
+echo "[OPENCODE] Wrote provider config to ${CONFIG_FILE} (provider=berget, default=moonshotai/Kimi-K2.6)"

@@ -16,7 +16,7 @@ Follows the same pattern as [claude-runner](https://github.com/birme/claude-runn
 
 | Variable | Default | Description |
 |---|---|---|
-| `MODEL` | `kimi-k2-6` | Model to use. Short names (e.g. `kimi-k2-6`) are prefixed with `berget/`. Full names (e.g. `berget/gemma4`) are passed as-is. |
+| `MODEL` | `moonshotai/Kimi-K2.6` | Model to use. Canonical IDs: `moonshotai/Kimi-K2.6`, `google/gemma-4-31B-it`, `mistralai/Mistral-Medium-3.5-128B`. Short aliases (e.g. `kimi-k2-6`) also work and are prefixed with `berget/`. |
 | `BERGET_BASE_URL` | `https://api.berget.ai/v1` | Berget AI API base URL |
 | `GIT_BRANCH` | _(default branch)_ | Branch to check out. Can also be appended to `SOURCE_URL` as `url#branch`. |
 | `GIT_TOKEN` | | Personal access token for cloning private repositories (also accepted as `GITHUB_TOKEN`) |
@@ -79,7 +79,7 @@ The runner respects standard agent configuration files in the cloned repo:
 3. Clone the repository (shallow, single branch) into `/usercontent`. Inject `GIT_TOKEN` into the clone URL for private repos.
 4. If `OSC_ACCESS_TOKEN` and `CONFIG_SVC` are both set, refresh the access token and load environment variables from the OSC config service.
 5. Configure GitHub CLI if `GIT_TOKEN` or `GITHUB_TOKEN` is available.
-6. Write `~/.config/opencode/opencode.json` with the Berget AI provider definition (models: `kimi-k2-6`, `gemma4`, `mistral-medium-3.5`).
+6. Write `~/.config/opencode/opencode.json` with the Berget AI provider definition (models: `moonshotai/Kimi-K2.6`, `google/gemma-4-31B-it`, `mistralai/Mistral-Medium-3.5-128B`). `autoupdate: false` is set to prevent update prompts in headless runs.
 7. If `OSC_ACCESS_TOKEN` is set, patch the OpenCode config to add the OSC MCP remote server.
 8. Run `opencode run --dangerously-skip-permissions [--model ...] [--format json] "$PROMPT"` and exit with OpenCode's exit code.
 
