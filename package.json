@@ -1,0 +1,19 @@
+{
+  "name": "@eyevinn/berget-code-runner",
+  "version": "0.1.0",
+  "description": "Run headless OpenCode sessions backed by Berget AI (sovereign-cloud, OpenAI-compatible) against a git repository",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/birme/berget-code-runner"
+  },
+  "keywords": [
+    "berget",
+    "berget-code",
+    "opencode",
+    "ai",
+    "agent",
+    "runner",
+    "osc"
+  ]
+}
