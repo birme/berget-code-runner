@@ -50,7 +50,7 @@ if [[ "${SOURCE_URL}" == *"#"* ]]; then
   SOURCE_URL="${SOURCE_URL%%#*}"
 fi
 
-GIT_TOKEN="${GIT_TOKEN:-${GITHUB_TOKEN:-}}"
+export GIT_TOKEN="${GIT_TOKEN:-${GITHUB_TOKEN:-}}"
 
 # Set up git credential helper — never embed the token in the remote URL or git config.
 # The helper script reads GIT_TOKEN from the environment at authentication time, so
