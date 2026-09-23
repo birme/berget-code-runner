@@ -50,14 +50,21 @@ if [[ "${SOURCE_URL}" == *"#"* ]]; then
   SOURCE_URL="${SOURCE_URL%%#*}"
 fi
 
-GIT_TOKEN="${GIT_TOKEN:-${GITHUB_TOKEN:-}}"
+export GIT_TOKEN="${GIT_TOKEN:-${GITHUB_TOKEN:-}}"
 
-CLONE_URL="${SOURCE_URL}"
+# Set up git credential helper — never embed the token in the remote URL or git config.
+# The helper script reads GIT_TOKEN from the environment at authentication time, so
+# "git remote -v" and "git config --list" cannot leak the token.
 if [ -n "${GIT_TOKEN}" ]; then
-  URL_WITHOUT_PROTO="${SOURCE_URL#https://}"
-  URL_WITHOUT_PROTO="${URL_WITHOUT_PROTO#http://}"
-  CLONE_URL="https://${GIT_TOKEN}@${URL_WITHOUT_PROTO}"
-  echo "Cloning private repository (token injected)..."
+  GIT_CRED_HELPER=$(mktemp)
+  cat > "${GIT_CRED_HELPER}" << 'CRED_EOF'
+#!/bin/sh
+echo "username=x"
+echo "password=${GIT_TOKEN}"
+CRED_EOF
+  chmod +x "${GIT_CRED_HELPER}"
+  git config --global credential.helper "${GIT_CRED_HELPER}"
+  echo "Cloning private repository..."
 else
   echo "Cloning public repository..."
 fi
@@ -68,7 +75,7 @@ if [ -n "${BRANCH}" ]; then
   echo "Branch: ${BRANCH}"
 fi
 
-git clone "${CLONE_ARGS[@]}" "${CLONE_URL}" "${WORK_DIR}" 2>&1
+git clone "${CLONE_ARGS[@]}" "${SOURCE_URL}" "${WORK_DIR}" 2>&1
 echo "Repository cloned successfully."
 
 if [ -n "${SUB_PATH}" ]; then
@@ -134,7 +141,10 @@ fi
 
 # --- 4. Configure GitHub CLI ---
 if [ -n "${GIT_TOKEN}" ]; then
-  git config --global url."https://${GIT_TOKEN}@github.com/".insteadOf "https://github.com/"
+  # The global credential helper (set during clone above) handles subsequent
+  # git operations — no url.insteadOf rewrite needed. That pattern embedded the
+  # token in ~/.gitconfig, making it visible via "git config --list".
+  : # no-op
 fi
 if [ -n "${GITHUB_TOKEN:-}" ]; then
   echo "${GITHUB_TOKEN}" | gh auth login --with-token 2>/dev/null && \
