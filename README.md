@@ -21,7 +21,14 @@ Follows the same pattern as [claude-runner](https://github.com/birme/claude-runn
 | `GIT_BRANCH` | _(default branch)_ | Branch to check out. Can also be appended to `SOURCE_URL` as `url#branch`. |
 | `GIT_TOKEN` | | Personal access token for cloning private repositories (also accepted as `GITHUB_TOKEN`) |
 | `SUB_PATH` | | Subdirectory within the cloned repo to use as the working directory |
-| `RAW_JSON` | `0` | Set to `1` to pass `--format json` to OpenCode |
+| `VERBOSE` | `1` | Rich logging. By default the runner streams OpenCode's JSON events and formats them into human-readable stdout (assistant text, tool calls, tool results, step summaries). Set to `0` or `false` for OpenCode's plain text output. |
+| `RAW_JSON` | `0` | Set to `1` or `true` to emit the raw JSONL events instead of formatted output. |
+| `ALLOWEDTOOLS`, `DISALLOWEDTOOLS` | | Accepted for compatibility with claude-runner but ignored (they use Claude Code tool names). |
+| `CONFIG_API_KEY` | | API key for an encrypted parameter store. Used with `OSC_ACCESS_TOKEN` and `CONFIG_SVC` so secret parameters are decrypted before being injected as environment variables. |
+| `GIT_TOKEN_REFRESH` | | Per-run nonce for refreshing a GitHub connection token. Set by deploy-manager for agent tasks with `githubConnection`. Together with `DEPLOY_MANAGER_URL`, `TASK_ID`, `RUN_ID` and `TENANT_ID` it starts a background loop that fetches a new token every 45 minutes (`TOKEN_REFRESH_INTERVAL` seconds to override) into a 0600 tmpfs file. The git credential helper reads that file when present and `GIT_TOKEN` otherwise. A refresh failure keeps the old token. |
+| `DEPLOY_MANAGER_URL`, `TASK_ID`, `RUN_ID`, `TENANT_ID` | | Used with `GIT_TOKEN_REFRESH` as above. |
+
+`gh` is wrapped by a shim that exports `GH_TOKEN` from the refreshed token file, except when `GH_TOKEN` was loaded from the parameter store (`GH_TOKEN_SOURCE=paramstore`): a parameter-store `GH_TOKEN` always wins.
 | `MAX_TURNS` | _(unlimited)_ | Accepted but ignored; OpenCode `run` has no turn-limit flag |
 | `OSC_ACCESS_TOKEN` | | OSC service access token. If set, the OSC MCP server is wired into OpenCode. |
 | `OSC_MCP_URL` | `https://mcp.osaas.io/mcp` | OSC MCP endpoint |
@@ -76,12 +83,16 @@ The runner respects standard agent configuration files in the cloned repo:
 
 1. Start as root, fix `/usercontent` ownership, then drop to the `node` user.
 2. Validate `BERGET_API_KEY`, `SOURCE_URL`, and `PROMPT`.
-3. Clone the repository (shallow, single branch) into `/usercontent`. Inject `GIT_TOKEN` into the clone URL for private repos.
+3. Clone the repository (shallow, single branch) into `/usercontent`. Private repos authenticate through a git credential helper, so the token never appears in the remote URL or git config.
 4. If `OSC_ACCESS_TOKEN` and `CONFIG_SVC` are both set, refresh the access token and load environment variables from the OSC config service.
-5. Configure GitHub CLI if `GIT_TOKEN` or `GITHUB_TOKEN` is available.
+5. Start the background GitHub token refresher when `GIT_TOKEN_REFRESH` is set, and authenticate the GitHub CLI if `GITHUB_TOKEN` is available.
 6. Write `~/.config/opencode/opencode.json` with the Berget AI provider definition (models: `moonshotai/Kimi-K2.6`, `google/gemma-4-31B-it`, `mistralai/Mistral-Medium-3.5-128B`). `autoupdate: false` is set to prevent update prompts in headless runs.
-7. If `OSC_ACCESS_TOKEN` is set, patch the OpenCode config to add the OSC MCP remote server.
-8. Run `opencode run --dangerously-skip-permissions [--model ...] [--format json] "$PROMPT"` and exit with OpenCode's exit code.
+7. If `OSC_ACCESS_TOKEN` is set, patch the OpenCode config to add the OSC MCP remote server (the token is referenced as `{env:OSC_ACCESS_TOKEN}`, not written to disk) and exit with an error if the registration did not stick.
+8. Run `opencode run --dangerously-skip-permissions [--model ...] --format json "$PROMPT"`, pipe the events through the formatter (unless `RAW_JSON=1` or `VERBOSE=0`) and exit with OpenCode's exit code.
+
+## Tests
+
+`npm test` runs the token refresh, gh shim, credential helper and stream formatter tests.
 
 ## License
 

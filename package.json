@@ -2,6 +2,9 @@
   "name": "@eyevinn/berget-code-runner",
   "version": "0.1.0",
   "description": "Run headless OpenCode sessions backed by Berget AI (sovereign-cloud, OpenAI-compatible) against a git repository",
+  "scripts": {
+    "test": "bash tests/run.sh"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",

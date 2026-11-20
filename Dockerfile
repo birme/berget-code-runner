@@ -137,7 +137,8 @@ VOLUME /usercontent
 WORKDIR /runner
 COPY ./scripts ./
 
-RUN chmod +x /runner/*.sh
+RUN chmod +x /runner/*.sh \
+    && install -m 0755 /runner/gh-shim.sh /usr/local/bin/gh
 
 # Starts as root; entrypoint fixes volume ownership then drops to node
 ENTRYPOINT ["/runner/entrypoint.sh"]

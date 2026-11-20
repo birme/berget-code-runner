@@ -31,6 +31,8 @@ PROMPT="${PROMPT:?PROMPT env var is required — the task for the agent to perfo
 
 MODEL="${MODEL:-}"
 MAX_TURNS="${MAX_TURNS:-}"
+ALLOWEDTOOLS="${ALLOWEDTOOLS:-}"
+DISALLOWEDTOOLS="${DISALLOWEDTOOLS:-}"
 SUB_PATH="${SUB_PATH:-}"
 BERGET_BASE_URL="${BERGET_BASE_URL:-https://api.berget.ai/v1}"
 
@@ -52,15 +54,39 @@ fi
 
 export GIT_TOKEN="${GIT_TOKEN:-${GITHUB_TOKEN:-}}"
 
+# Token file for GitHub-connection refresh (see token-refresh.sh). Lives on tmpfs when
+# available. The credential helper prefers this file over GIT_TOKEN when it exists.
+TOKEN_REFRESH_ENABLED=0
+if [ -n "${GIT_TOKEN_REFRESH:-}" ] && [ -n "${DEPLOY_MANAGER_URL:-}" ]; then
+  TOKEN_REFRESH_ENABLED=1
+  if [ -d /dev/shm ] && [ -w /dev/shm ]; then
+    TOKEN_DIR=$(mktemp -d /dev/shm/git-token.XXXXXX)
+  else
+    TOKEN_DIR=$(mktemp -d)
+  fi
+  chmod 700 "${TOKEN_DIR}"
+  export GIT_TOKEN_FILE="${TOKEN_DIR}/token"
+  # Seed with the token the run started with so gh sees it before the first refresh
+  if [ -n "${GIT_TOKEN}" ]; then
+    (umask 077; printf '%s' "${GIT_TOKEN}" > "${GIT_TOKEN_FILE}")
+  fi
+fi
+
 # Set up git credential helper — never embed the token in the remote URL or git config.
-# The helper script reads GIT_TOKEN from the environment at authentication time, so
-# "git remote -v" and "git config --list" cannot leak the token.
-if [ -n "${GIT_TOKEN}" ]; then
+# The helper script reads the refreshed token file (when present) or GIT_TOKEN from the
+# environment at authentication time, so "git remote -v" and "git config --list" cannot
+# leak the token.
+if [ -n "${GIT_TOKEN}" ] || [ "${TOKEN_REFRESH_ENABLED}" = "1" ]; then
   GIT_CRED_HELPER=$(mktemp)
   cat > "${GIT_CRED_HELPER}" << 'CRED_EOF'
 #!/bin/sh
+if [ -n "${GIT_TOKEN_FILE:-}" ] && [ -s "${GIT_TOKEN_FILE}" ]; then
+  _token=$(cat "${GIT_TOKEN_FILE}")
+else
+  _token="${GIT_TOKEN:-}"
+fi
 echo "username=x"
-echo "password=${GIT_TOKEN}"
+echo "password=${_token}"
 CRED_EOF
   chmod +x "${GIT_CRED_HELPER}"
   git config --global credential.helper "${GIT_CRED_HELPER}"
@@ -139,6 +165,23 @@ if [ -n "${OSC_ACCESS_TOKEN:-}" ] && [ -n "${CONFIG_SVC:-}" ]; then
   fi
 fi
 
+# Record whether GH_TOKEN came from the parameter store. The gh shim only uses the
+# GitHub-connection token when this is not "paramstore" (a parameter-store GH_TOKEN
+# always takes precedence).
+if [ -n "${GH_TOKEN:-}" ]; then
+  export GH_TOKEN_SOURCE=paramstore
+fi
+
+# Start the background token refresher (GitHub connection, runs longer than 1 h)
+if [ "${TOKEN_REFRESH_ENABLED}" = "1" ]; then
+  if [ -n "${TASK_ID:-}" ] && [ -n "${RUN_ID:-}" ] && [ -n "${TENANT_ID:-}" ]; then
+    /runner/token-refresh.sh &
+    echo "[GIT-TOKEN] Background token refresh started (every ${TOKEN_REFRESH_INTERVAL:-2700}s)"
+  else
+    echo "[GIT-TOKEN] WARNING: GIT_TOKEN_REFRESH set but TASK_ID, RUN_ID or TENANT_ID missing; token will not be refreshed"
+  fi
+fi
+
 # --- 4. Configure GitHub CLI ---
 if [ -n "${GIT_TOKEN}" ]; then
   # The global credential helper (set during clone above) handles subsequent
@@ -161,12 +204,24 @@ if [ -n "${OSC_ACCESS_TOKEN:-}" ]; then
   echo "Configuring OSC MCP server for OpenCode..."
   CONFIG_FILE="${OPENCODE_CONFIG_DIR:-${HOME}/.config/opencode}/opencode.json"
   MCP_URL="${OSC_MCP_URL:-https://mcp.osaas.io/mcp}"
+  # The token is referenced through OpenCode's {env:...} templating so the literal
+  # secret is not written to disk (OSC_ACCESS_TOKEN is exported to the session below).
+  export OSC_ACCESS_TOKEN
   tmp=$(mktemp)
-  jq --arg url "${MCP_URL}" --arg auth "Bearer ${OSC_ACCESS_TOKEN}" \
+  if ! jq --arg url "${MCP_URL}" --arg auth 'Bearer {env:OSC_ACCESS_TOKEN}' \
     '.mcp = ((.mcp // {}) + {
        "OSC": { "type": "remote", "url": $url, "enabled": true,
                 "headers": { "Authorization": $auth } }
-     })' "${CONFIG_FILE}" > "${tmp}" && mv "${tmp}" "${CONFIG_FILE}"
+     })' "${CONFIG_FILE}" > "${tmp}"; then
+    echo "ERROR: failed to add the OSC MCP server to ${CONFIG_FILE}" >&2
+    exit 1
+  fi
+  mv "${tmp}" "${CONFIG_FILE}"
+  # Verify the server is in the config — fail loudly instead of running without MCP.
+  if [ "$(jq -r '.mcp.OSC.url // empty' "${CONFIG_FILE}")" != "${MCP_URL}" ]; then
+    echo "ERROR: OSC MCP server registration did not stick in ${CONFIG_FILE}" >&2
+    exit 1
+  fi
   echo "OSC MCP server configured (${MCP_URL})"
 fi
 
@@ -181,12 +236,24 @@ if [ -n "${MODEL}" ]; then
   fi
 fi
 
-if [ "${RAW_JSON:-0}" = "1" ] || [ "${RAW_JSON:-0}" = "true" ]; then
+# Stream JSON events by default so tool calls, tool results and intermediate
+# turns are visible; format-stream.js turns them into human-readable stdout.
+# VERBOSE=0 falls back to plain output (OpenCode's default text format),
+# RAW_JSON=1 emits the raw JSONL events without the formatter.
+STREAM_JSON_ENABLED=0
+if [ "${VERBOSE:-1}" != "0" ] && [ "${VERBOSE:-1}" != "false" ]; then
+  OPENCODE_ARGS+=("--format" "json")
+  STREAM_JSON_ENABLED=1
+elif [ "${RAW_JSON:-0}" = "1" ] || [ "${RAW_JSON:-0}" = "true" ]; then
   OPENCODE_ARGS+=("--format" "json")
 fi
 
 if [ -n "${MAX_TURNS}" ]; then
   echo "[WARN] MAX_TURNS=${MAX_TURNS} provided but OpenCode 'run' has no turn-limit flag; ignoring."
+fi
+
+if [ -n "${ALLOWEDTOOLS}" ] || [ -n "${DISALLOWEDTOOLS}" ]; then
+  echo "[WARN] ALLOWEDTOOLS/DISALLOWEDTOOLS use Claude Code tool names and are not applied by OpenCode; ignoring."
 fi
 
 # --- 8. Run the OpenCode session ---
@@ -199,10 +266,17 @@ echo ""
 export BERGET_API_KEY="${BERGET_API_KEY}"
 export OPENCODE_DISABLE_AUTOUPDATE=1
 
-set +e
-opencode "${OPENCODE_ARGS[@]}" "${PROMPT}"
-EXIT_CODE=$?
-set -e
+if [ "${STREAM_JSON_ENABLED}" = "1" ] && [ "${RAW_JSON:-0}" != "1" ] && [ "${RAW_JSON:-0}" != "true" ]; then
+  set +e
+  opencode "${OPENCODE_ARGS[@]}" "${PROMPT}" | node /runner/format-stream.js
+  EXIT_CODE=${PIPESTATUS[0]}
+  set -e
+else
+  set +e
+  opencode "${OPENCODE_ARGS[@]}" "${PROMPT}"
+  EXIT_CODE=$?
+  set -e
+fi
 
 echo ""
 echo "=== OpenCode session ended ==="
