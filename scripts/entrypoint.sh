@@ -31,7 +31,7 @@ PROMPT="${PROMPT:?PROMPT env var is required — the task for the agent to perfo
 
 MODEL="${MODEL:-}"
 # OpenCode addresses models as <provider>/<model>. A Berget model id such as
-# "moonshotai/Kimi-K3.1-Pro" has a slash of its own, so it must always be given
+# "google/gemma-4-31B-it" has a slash of its own, so it must always be given
 # as "berget/<id>"; an id that already carries the prefix is accepted as is.
 MODEL_ID="${MODEL#berget/}"
 export MODEL_ID
@@ -42,7 +42,7 @@ SUB_PATH="${SUB_PATH:-}"
 BERGET_BASE_URL="${BERGET_BASE_URL:-https://api.berget.ai/v1}"
 
 echo "Source:      ${SOURCE_URL}"
-echo "Model:       ${MODEL_ID:-<default: moonshotai/Kimi-K3.1-Pro>}"
+echo "Model:       ${MODEL_ID:-<default: google/gemma-4-31B-it>}"
 echo "Max turns:   ${MAX_TURNS:-<unlimited>}"
 echo "Sub path:    ${SUB_PATH:-<root>}"
 echo "Berget URL:  ${BERGET_BASE_URL}"
