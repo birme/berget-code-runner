@@ -16,7 +16,7 @@ Follows the same pattern as [claude-runner](https://github.com/birme/claude-runn
 
 | Variable | Default | Description |
 |---|---|---|
-| `MODEL` | `moonshotai/Kimi-K3.1-Pro` | Berget model id or alias, with or without a leading `berget/`. Any model that Berget serves with tool calling works; the ones currently listed at `https://api.berget.ai/v1/models` are `moonshotai/Kimi-K3.1-Pro`, `zai-org/GLM-5.3-Flash`, `google/gemma-4-31B-it` and `mistralai/Mistral-Small-3.2-24B-Instruct-2506`. A retired model fails the run with Berget's own error. |
+| `MODEL` | `google/gemma-4-31B-it` | Berget model id or alias, with or without a leading `berget/`. Any model that Berget serves with tool calling works; the ones currently listed at `https://api.berget.ai/v1/models` are `moonshotai/Kimi-K3.1-Pro`, `zai-org/GLM-5.3-Flash`, `google/gemma-4-31B-it` and `mistralai/Mistral-Small-3.2-24B-Instruct-2506`. A retired model fails the run with Berget's own error. |
 | `BERGET_BASE_URL` | `https://api.berget.ai/v1` | Berget AI API base URL |
 | `GIT_BRANCH` | _(default branch)_ | Branch to check out. Can also be appended to `SOURCE_URL` as `url#branch`. |
 | `GIT_TOKEN` | | Personal access token for cloning private repositories (also accepted as `GITHUB_TOKEN`) |

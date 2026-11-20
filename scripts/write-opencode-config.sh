@@ -20,7 +20,7 @@ set -euo pipefail
 CONFIG_DIR="${OPENCODE_CONFIG_DIR:-${HOME}/.config/opencode}"
 CONFIG_FILE="${CONFIG_DIR}/opencode.json"
 BERGET_BASE_URL="${BERGET_BASE_URL:-https://api.berget.ai/v1}"
-DEFAULT_MODEL_ID="moonshotai/Kimi-K3.1-Pro"
+DEFAULT_MODEL_ID="google/gemma-4-31B-it"
 MODEL_ID="${MODEL_ID:-${DEFAULT_MODEL_ID}}"
 
 mkdir -p "${CONFIG_DIR}"
