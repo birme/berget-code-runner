@@ -30,6 +30,11 @@ fi
 PROMPT="${PROMPT:?PROMPT env var is required — the task for the agent to perform}"
 
 MODEL="${MODEL:-}"
+# OpenCode addresses models as <provider>/<model>. A Berget model id such as
+# "moonshotai/Kimi-K3.1-Pro" has a slash of its own, so it must always be given
+# as "berget/<id>"; an id that already carries the prefix is accepted as is.
+MODEL_ID="${MODEL#berget/}"
+export MODEL_ID
 MAX_TURNS="${MAX_TURNS:-}"
 ALLOWEDTOOLS="${ALLOWEDTOOLS:-}"
 DISALLOWEDTOOLS="${DISALLOWEDTOOLS:-}"
@@ -37,7 +42,7 @@ SUB_PATH="${SUB_PATH:-}"
 BERGET_BASE_URL="${BERGET_BASE_URL:-https://api.berget.ai/v1}"
 
 echo "Source:      ${SOURCE_URL}"
-echo "Model:       ${MODEL:-<default: berget/kimi-k2-6>}"
+echo "Model:       ${MODEL_ID:-<default: moonshotai/Kimi-K3.1-Pro>}"
 echo "Max turns:   ${MAX_TURNS:-<unlimited>}"
 echo "Sub path:    ${SUB_PATH:-<root>}"
 echo "Berget URL:  ${BERGET_BASE_URL}"
@@ -228,12 +233,8 @@ fi
 # --- 7. Build the OpenCode command ---
 OPENCODE_ARGS=("run" "--dangerously-skip-permissions")
 
-if [ -n "${MODEL}" ]; then
-  if [[ "${MODEL}" == */* ]]; then
-    OPENCODE_ARGS+=("--model" "${MODEL}")
-  else
-    OPENCODE_ARGS+=("--model" "berget/${MODEL}")
-  fi
+if [ -n "${MODEL_ID}" ]; then
+  OPENCODE_ARGS+=("--model" "berget/${MODEL_ID}")
 fi
 
 # Stream JSON events by default so tool calls, tool results and intermediate
