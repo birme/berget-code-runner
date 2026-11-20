@@ -7,8 +7,49 @@ const readline = require('readline');
 
 const rl = readline.createInterface({ input: process.stdin });
 
+// Redact secrets before anything is printed: the literal values of the runner's
+// credentials (and the refreshed token file contents), plus common token shapes.
+const SECRET_ENV = [
+  'GIT_TOKEN',
+  'GITHUB_TOKEN',
+  'GH_TOKEN',
+  'BERGET_API_KEY',
+  'OSC_ACCESS_TOKEN',
+  'GIT_TOKEN_REFRESH',
+  'CONFIG_API_KEY',
+];
+const secrets = SECRET_ENV.map((k) => process.env[k]).filter(
+  (v) => v && v.length >= 8
+);
+try {
+  if (process.env.GIT_TOKEN_FILE) {
+    const t = require('fs').readFileSync(process.env.GIT_TOKEN_FILE, 'utf8').trim();
+    if (t.length >= 8) secrets.push(t);
+  }
+} catch {
+  // no token file
+}
+const PATTERNS = [
+  /\b(?:ghp|ghs|gho|ghu|ghr)_[A-Za-z0-9]{20,}/g,
+  /\bgithub_pat_[A-Za-z0-9_]{20,}/g,
+  /(Bearer\s+)[A-Za-z0-9._~+\/=-]{8,}/gi,
+];
+
+function redact(s) {
+  if (typeof s !== 'string') return s;
+  let out = s;
+  for (const v of secrets) out = out.split(v).join('[REDACTED]');
+  for (const re of PATTERNS) {
+    out = out.replace(re, (m, p1) => (p1 ? `${p1}[REDACTED]` : '[REDACTED]'));
+  }
+  return out;
+}
+
+const log = (line) => console.log(redact(line));
+
 function truncate(s, n) {
   if (typeof s !== 'string') return '';
+  s = redact(s);
   if (s.length <= n) return s;
   return s.slice(0, n) + `… [${s.length - n} more chars]`;
 }
@@ -33,7 +74,7 @@ rl.on('line', (raw) => {
   try {
     evt = JSON.parse(line);
   } catch {
-    console.log(line);
+    log(line);
     return;
   }
 
@@ -43,22 +84,22 @@ rl.on('line', (raw) => {
       break;
 
     case 'text':
-      if (part.text) console.log(part.text);
+      if (part.text) log(part.text);
       break;
 
     case 'reasoning':
-      if (part.text) console.log(`[thinking] ${truncate(part.text, 400)}`);
+      if (part.text) log(`[thinking] ${truncate(part.text, 400)}`);
       break;
 
     case 'tool_use': {
       const name = part.tool || 'tool';
       const state = part.state || {};
       const arg = formatToolInput(state.input);
-      console.log(
+      log(
         arg ? `[tool_use] ${name} — ${truncate(arg, 300)}` : `[tool_use] ${name}`
       );
       if (state.status === 'error') {
-        console.log(
+        log(
           `[tool_error] ${truncate(String(state.error ?? state.output ?? ''), 500)}`
         );
       } else if (state.output !== undefined && state.output !== '') {
@@ -66,7 +107,7 @@ rl.on('line', (raw) => {
           typeof state.output === 'string'
             ? state.output
             : JSON.stringify(state.output);
-        console.log(`[tool_result] ${truncate(out, 500)}`);
+        log(`[tool_result] ${truncate(out, 500)}`);
       }
       break;
     }
@@ -81,19 +122,19 @@ rl.on('line', (raw) => {
       if (typeof part.cost === 'number' && part.cost > 0) {
         bits.push(`$${part.cost.toFixed(4)}`);
       }
-      console.log(`[step] ${bits.filter(Boolean).join(' ')}`);
+      log(`[step] ${bits.filter(Boolean).join(' ')}`);
       break;
     }
 
     case 'error': {
       const e = evt.error || {};
-      console.log(
+      log(
         `[error] ${e.name || ''} ${e.data?.message || e.message || ''}`.trimEnd()
       );
       break;
     }
 
     default:
-      console.log(`[${evt.type || 'unknown'}]`);
+      log(`[${evt.type || 'unknown'}]`);
   }
 });

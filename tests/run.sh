@@ -92,6 +92,9 @@ check "formatter prints tool result" 'echo "${FMT}" | grep -q "^\[tool_result\] 
 check "formatter prints step summary" 'echo "${FMT}" | grep -q "^\[step\] stop"'
 check "formatter passes non-JSON through" '[ "$(echo "plain line" | node "${ROOT}/scripts/format-stream.js")" = "plain line" ]'
 
+RED=$(printf '%s\n' '{"type":"tool_use","part":{"tool":"bash","state":{"status":"completed","input":{"command":"env"},"output":"BERGET_API_KEY=sekret-key-12345 ghp_abcdefghijklmnopqrstuv1234 Authorization: Bearer abc.def.ghi123456"}}}' | BERGET_API_KEY=sekret-key-12345 node "${ROOT}/scripts/format-stream.js")
+check "formatter redacts env secrets and token patterns" '! echo "${RED}" | grep -qE "sekret-key|ghp_abc|abc.def.ghi" && echo "${RED}" | grep -q REDACTED'
+
 # --- no token in git config / remote URL / logs ----------------------------
 export HOME="${TMP}/home"; mkdir -p "${HOME}"
 git config --global credential.helper "${TMP}/helper"
