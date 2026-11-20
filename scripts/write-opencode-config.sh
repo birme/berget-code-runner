@@ -8,6 +8,9 @@ set -euo pipefail
 #   BERGET_API_KEY      (required — validated by entrypoint before this runs)
 #   BERGET_BASE_URL     (optional — defaults to https://api.berget.ai/v1)
 #   OPENCODE_CONFIG_DIR (optional — defaults to $HOME/.config/opencode)
+#   MODEL_ID            (optional — Berget model id, without the "berget/" prefix.
+#                        Added to the provider's model list if it is not a known
+#                        one, so any model Berget serves can be selected.)
 #
 # The API key is injected via OpenCode's {env:BERGET_API_KEY} templating so the
 # literal secret is never written to disk. If a future OpenCode build does not
@@ -17,6 +20,8 @@ set -euo pipefail
 CONFIG_DIR="${OPENCODE_CONFIG_DIR:-${HOME}/.config/opencode}"
 CONFIG_FILE="${CONFIG_DIR}/opencode.json"
 BERGET_BASE_URL="${BERGET_BASE_URL:-https://api.berget.ai/v1}"
+DEFAULT_MODEL_ID="moonshotai/Kimi-K3.1-Pro"
+MODEL_ID="${MODEL_ID:-${DEFAULT_MODEL_ID}}"
 
 mkdir -p "${CONFIG_DIR}"
 
@@ -29,6 +34,7 @@ fi
 jq -n \
   --arg baseURL "${BERGET_BASE_URL}" \
   --arg apiKey "${API_KEY_VALUE}" \
+  --arg modelId "${MODEL_ID}" \
   '{
     "$schema": "https://opencode.ai/config.json",
     "autoupdate": false,
@@ -40,14 +46,15 @@ jq -n \
           "baseURL": $baseURL,
           "apiKey": $apiKey
         },
-        "models": {
-          "moonshotai/Kimi-K2.6":             { "name": "Kimi K2.6 (Berget)" },
-          "google/gemma-4-31B-it":             { "name": "Gemma 4 31B (Berget)" },
-          "mistralai/Mistral-Medium-3.5-128B": { "name": "Mistral Medium 3.5 (Berget)" }
-        }
+        "models": ({
+          "moonshotai/Kimi-K3.1-Pro":                    { "name": "Kimi K3.1 Pro (Berget)" },
+          "zai-org/GLM-5.3-Flash":                       { "name": "GLM 5.3 Flash (Berget)" },
+          "google/gemma-4-31B-it":                       { "name": "Gemma 4 31B (Berget)" },
+          "mistralai/Mistral-Small-3.2-24B-Instruct-2506": { "name": "Mistral Small 3.2 (Berget)" }
+        } + { ($modelId): { "name": ($modelId + " (Berget)") } })
       }
     },
-    "model": "berget/moonshotai/Kimi-K2.6"
+    "model": ("berget/" + $modelId)
   }' > "${CONFIG_FILE}"
 
-echo "[OPENCODE] Wrote provider config to ${CONFIG_FILE} (provider=berget, default=moonshotai/Kimi-K2.6)"
+echo "[OPENCODE] Wrote provider config to ${CONFIG_FILE} (provider=berget, model=${MODEL_ID})"

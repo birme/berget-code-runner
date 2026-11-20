@@ -103,6 +103,22 @@ CFG="$(git config --global --list; cat "${TMP}/repo/.git/config"; git -C "${TMP}
 check "no token in git config or remote URL" '! echo "${CFG}" | grep -qE "ghs_|static_TOKEN"'
 check "entrypoint never embeds a token in URL/insteadOf" '! grep -v "^ *#" "${ROOT}/scripts/entrypoint.sh" | grep -qE "x-access-token|insteadOf|://[^ ]*\$\{?GIT_TOKEN"'
 
+# --- model selection and generated OpenCode config -------------------------
+cfg() { OPENCODE_CONFIG_DIR="${TMP}/oc-$1" BERGET_API_KEY=k MODEL_ID="${2:-}" bash -c '[ -n "${MODEL_ID}" ] || unset MODEL_ID; . "${ROOT}/scripts/write-opencode-config.sh"' >/dev/null && cat "${TMP}/oc-$1/opencode.json"; }
+export ROOT
+C1="$(cfg default)"
+check "default model is the current Berget default" '[ "$(echo "${C1}" | jq -r .model)" = "berget/moonshotai/Kimi-K3.1-Pro" ]'
+check "default config lists no retired model" '! echo "${C1}" | grep -qE "Kimi-K2.6|Medium-3.5"'
+C2="$(cfg custom zai-org/GLM-5.3-Flash)"
+check "selected model becomes the config model" '[ "$(echo "${C2}" | jq -r .model)" = "berget/zai-org/GLM-5.3-Flash" ]'
+C3="$(cfg alias kimi-k3)"
+check "an unlisted model id or alias is added to the provider models" 'echo "${C3}" | jq -e ".provider.berget.models[\"kimi-k3\"]" >/dev/null && [ "$(echo "${C3}" | jq -r .model)" = "berget/kimi-k3" ]'
+check "config keeps the API key as a template, not a literal" 'echo "${C1}" | grep -q "{env:BERGET_API_KEY}" && ! echo "${C1}" | grep -q "\"apiKey\": \"k\""'
+norm() { MODEL="$1" bash -c "$(grep '^MODEL_ID=' "${ROOT}/scripts/entrypoint.sh"); echo \"\${MODEL_ID}\""; }
+check "MODEL with a slash is not mistaken for provider/model" '[ "$(norm moonshotai/Kimi-K3.1-Pro)" = "moonshotai/Kimi-K3.1-Pro" ]'
+check "an existing berget/ prefix is stripped, not doubled" '[ "$(norm berget/google/gemma-4-31B-it)" = "google/gemma-4-31B-it" ]'
+check "entrypoint always passes --model as berget/<id>" 'grep -q "OPENCODE_ARGS+=(\"--model\" \"berget/\${MODEL_ID}\")" "${ROOT}/scripts/entrypoint.sh"'
+
 echo ""
 echo "${PASSES} passed, ${FAILS} failed"
 [ ${FAILS} -eq 0 ]
